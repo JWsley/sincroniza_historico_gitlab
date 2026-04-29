@@ -25,14 +25,13 @@ def get_gitlab_activity():
     activity_by_date = {}
     page = 1
     
-    print(f"Buscando atividades de {GITLAB_URL}...")
+    print(f"Buscando todas as atividades de {GITLAB_URL}...")
     
     while True:
         url = f"{GITLAB_URL}/api/v4/events"
         params = {
             "private_token": GITLAB_TOKEN,
             "after": SINCE_DATE,
-            "action": "pushed",
             "per_page": 100,
             "page": page
         }
@@ -50,13 +49,22 @@ def get_gitlab_activity():
             
         for event in events:
             date_str = event['created_at'].split('T')[0]
-            commit_count = event.get('push_data', {}).get('commit_count', 1)
+            
+            # Se for push, conta os commits. Se for qualquer outra atividade (issue, comment, etc), conta como 1.
+            if event.get('action_name') in ['pushed to', 'pushed new']:
+                commit_count = event.get('push_data', {}).get('commit_count', 1)
+                # Às vezes o commit_count vem como 0 em alguns tipos de push de sistema
+                commit_count = max(commit_count, 1)
+            else:
+                commit_count = 1
+                
             activity_by_date[date_str] = activity_by_date.get(date_str, 0) + commit_count
             
         print(f"Lendo página {page}...")
         page += 1
 
-    return activity_by_date
+    # Filtra apenas dias que realmente tiveram atividade > 0
+    return {k: v for k, v in activity_by_date.items() if v > 0}
 
 def sync_to_github(activity):
     if not activity:
